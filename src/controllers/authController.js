@@ -5,9 +5,7 @@ require("dotenv").config();
 
 const registerHandler = async (request, h) => {
   const { name, email, password, google_id, image } = request.payload;
-
   const isLoginGoogle = !!google_id;
-
   // Cari user berdasarkan email
   const existingUser = await User.findOne({ where: { email } });
 
@@ -17,8 +15,7 @@ const registerHandler = async (request, h) => {
       await existingUser.update({
         name,
         google_id,
-        profile_picture: image || existingUser.profile_picture, // update gambar jika ada
-        // Tidak update password karena login via Google
+        profile_picture: image || existingUser.profile_picture,
       });
 
       // Generate JWT
@@ -37,7 +34,13 @@ const registerHandler = async (request, h) => {
           statusCode: "200",
           status: "success",
           message: "User login via Google successful",
-          token: token,
+          user: {
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            admin: existingUser.admin,
+            token: token,
+          },
         })
         .code(200);
     } else {
@@ -66,9 +69,15 @@ const registerHandler = async (request, h) => {
           statusCode: "201",
           status: "success",
           message: "User registered via Google successfully",
-          token: token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            admin: user.admin,
+            token: token,
+          },
         })
-        .code(201);
+        .code(200);
     }
   } else {
     // Proses registrasi biasa
@@ -79,7 +88,7 @@ const registerHandler = async (request, h) => {
           status: "fail",
           message: "Email already registered",
         })
-        .code(409);
+        .code(200);
     }
 
     // Hash password
@@ -108,9 +117,15 @@ const registerHandler = async (request, h) => {
         statusCode: "201",
         status: "success",
         message: "User registered successfully",
-        token: token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          admin: user.admin,
+          token: token,
+        },
       })
-      .code(201);
+      .code(200);
   }
 };
 
