@@ -14,8 +14,8 @@ const init = async () => {
   });
 
   await server.register(Jwt);
-  server.auth.strategy("jwt", "jwt", authMiddleware);
-  server.auth.default("jwt");
+  // server.auth.strategy("jwt", "jwt", authMiddleware);
+  // server.auth.default("jwt");
 
   server.route(authRoutes);
   server.route(articleRoute);

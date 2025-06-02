@@ -14,6 +14,7 @@ const {
 } = require("../models/relation");
 // const sequelize = require("../models/index");
 const { Op, Sequelize } = require("sequelize");
+const articleService = require("../services/articleService");
 
 const createArticleHandler = async (request, h) => {
   const articleSchema = Joi.object({
@@ -193,7 +194,7 @@ const getCalculatedArticleAttributes = (userId) => {
               AND "user_like"."user_id" = '${userId}'
           )
       )`),
-      'isLikedByUser',
+      "isLikedByUser",
     ]);
     attributes.push([
       Sequelize.literal(`(
@@ -203,11 +204,11 @@ const getCalculatedArticleAttributes = (userId) => {
               AND "user_save"."user_id" = '${userId}'
           )
       )`),
-      'isSavedByUser',
+      "isSavedByUser",
     ]);
   } else {
-    attributes.push([Sequelize.literal('false'), 'isLikedByUser']);
-    attributes.push([Sequelize.literal('false'), 'isSavedByUser']);
+    attributes.push([Sequelize.literal("false"), "isLikedByUser"]);
+    attributes.push([Sequelize.literal("false"), "isSavedByUser"]);
   }
   return attributes;
 };
@@ -256,7 +257,7 @@ const getAllArticleHandler = async (request, h) => {
       order: [["created_at", "DESC"]],
       distinct: true,
     });
-    
+
     return h
       .response({
         statusCode: 200,
@@ -279,9 +280,13 @@ const getAllArticleHandler = async (request, h) => {
 const getArticleBySlug = async (request, h) => {
   try {
     const { slug } = request.params;
-    const userId = request.auth.isAuthenticated ? request.auth.credentials.id : null;
+    const userId = request.auth.isAuthenticated
+      ? request.auth.credentials.id
+      : null;
 
-    console.log(`[getArticleBySlug] Mencari artikel dengan slug: ${slug}, untuk userId: ${userId}`);
+    console.log(
+      `[getArticleBySlug] Mencari artikel dengan slug: ${slug}, untuk userId: ${userId}`
+    );
 
     const calculatedAttributes = getCalculatedArticleAttributes(userId);
 
@@ -291,57 +296,76 @@ const getArticleBySlug = async (request, h) => {
         {
           model: ArticleCategoryMap,
           as: "category_maps",
-          attributes: ['id'],
+          attributes: ["id"],
           include: [
             {
               model: Category,
               as: "category",
-              attributes: ["id", "category"], 
+              attributes: ["id", "category"],
             },
           ],
           required: false,
         },
         {
           model: User,
-          as: 'author', 
-          attributes: ['id', 'name', 'email'],
-        }
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
       ],
       attributes: {
         include: calculatedAttributes,
       },
     });
 
-    console.log(`[getArticleBySlug] Hasil findOne untuk slug '${slug}':`, article ? 'Ditemukan' : 'Tidak Ditemukan (null)');
+    console.log(
+      `[getArticleBySlug] Hasil findOne untuk slug '${slug}':`,
+      article ? "Ditemukan" : "Tidak Ditemukan (null)"
+    );
     if (!article) {
-      return h.response({
-        statusCode: 404,
-        status: "fail",
-        message: "Article not found",
-      }).code(404);
+      return h
+        .response({
+          statusCode: 404,
+          status: "fail",
+          message: "Article not found",
+        })
+        .code(404);
     }
 
     if (!article.active && article.user_id !== userId) {
-      console.log(`[getArticleBySlug] Artikel '${slug}' tidak aktif dan user '${userId}' bukan pemilik.`);
-      return h.response({
-        statusCode: 404,
-        status: "fail",
-        message: "Article not found or you do not have permission to view it.",
-      }).code(404);
+      console.log(
+        `[getArticleBySlug] Artikel '${slug}' tidak aktif dan user '${userId}' bukan pemilik.`
+      );
+      return h
+        .response({
+          statusCode: 404,
+          status: "fail",
+          message:
+            "Article not found or you do not have permission to view it.",
+        })
+        .code(404);
     }
 
-    return h.response({
-      statusCode: 200,
-      status: "success",
-      data: article,
-    }).code(200);
+    return h
+      .response({
+        statusCode: 200,
+        status: "success",
+        data: article,
+      })
+      .code(200);
   } catch (error) {
-    console.error("Error in getArticleBySlug:", error.name, error.message, error.stack); // Log error lebih detail
-    return h.response({
-      statusCode: 500,
-      status: "error",
-      message: "Internal Server Error",
-    }).code(500);
+    console.error(
+      "Error in getArticleBySlug:",
+      error.name,
+      error.message,
+      error.stack
+    ); // Log error lebih detail
+    return h
+      .response({
+        statusCode: 500,
+        status: "error",
+        message: "Internal Server Error",
+      })
+      .code(500);
   }
 };
 
@@ -559,4 +583,41 @@ module.exports = {
   postSaveArticle,
   deleteSaveArticle,
   getArticleBySlug,
+};
+
+// Create new article
+const createArticle = async (request, h) => {
+  try {
+    const articleData = request.payload;
+    const article = await articleService.createArticle(articleData);
+
+    return h
+      .response({
+        statusCode: 201,
+        success: true,
+        message: "Article created successfully",
+        data: article,
+      })
+      .code(201);
+  } catch (error) {
+    console.error("Create Article Error:", error);
+    return h
+      .response({
+        statusCode: 500,
+        status: "error",
+        message: error.message || "Internal Server Error",
+      })
+      .code(500);
+  }
+};
+module.exports = {
+  createArticleHandler,
+  getAllArticleHandler,
+  getAllCategories,
+  postLikeArticle,
+  deleteLikeArticle,
+  postSaveArticle,
+  deleteSaveArticle,
+  getArticleBySlug,
+  createArticle,
 };

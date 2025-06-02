@@ -8,6 +8,7 @@ const {
   postSaveArticle,
   deleteSaveArticle,
   getArticleBySlug,
+  createArticle,
 } = require("../controllers/articleController");
 const Joi = require("joi");
 
@@ -32,15 +33,16 @@ const articleRoutes = [
   {
     method: "POST",
     path: "/articles",
-    handler: createArticleHandler,
-    options: {
-      payload: {
-        output: "stream",
-        parse: false,
-        maxBytes: 5 * 1024 * 1024, // 5MB
-        allow: "multipart/form-data",
-      },
-    },
+    // handler: createArticleHandler,
+    handler: createArticle,
+    // options: {
+    //   payload: {
+    //     output: "stream",
+    //     parse: false,
+    //     maxBytes: 5 * 1024 * 1024, // 5MB
+    //     allow: "multipart/form-data",
+    //   },
+    // },
   },
   {
     method: "GET",
