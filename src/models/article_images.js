@@ -1,6 +1,7 @@
-("use strict");
+"use strict";
 const { DataTypes } = require("sequelize");
 const sequelize = require("./index");
+
 const ArticleImage = sequelize.define(
   "ArticleImage",
   {
@@ -14,8 +15,24 @@ const ArticleImage = sequelize.define(
       allowNull: false,
       validate: {
         notEmpty: true,
-        isUrl: true,
+        isUrl: {
+          args: true,
+          msg: "Image URL must be a valid URL",
+        },
       },
+    },
+    alt_text: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    caption: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    order: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
     },
     article_id: {
       type: DataTypes.UUID,
@@ -24,6 +41,8 @@ const ArticleImage = sequelize.define(
         model: "Articles",
         key: "id",
       },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
     },
   },
   {
@@ -34,6 +53,14 @@ const ArticleImage = sequelize.define(
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
+    indexes: [
+      {
+        fields: ["article_id"],
+      },
+      {
+        fields: ["order"],
+      },
+    ],
   }
 );
 

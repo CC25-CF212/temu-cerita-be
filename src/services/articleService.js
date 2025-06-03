@@ -39,17 +39,16 @@ class ArticleService {
 
     const slug = await this.generateUniqueSlug(title);
 
-    let existingCategory = await Category.findOne({
-      where: { category: category[0].trim().toLowerCase() },
-    });
+    // let existingCategory = await Category.findOne({
+    //   where: { name: category[0].trim().toLowerCase() },
+    // });
 
-    if (!existingCategory) {
-      existingCategory = await Category.create({
-        id: uuidv4(),
-        category: category[0].trim().toLowerCase(),
-      });
-    }
-
+    // if (!existingCategory) {
+    //   existingCategory = await Category.create({
+    //     id: uuidv4(),
+    //     name: category[0].trim().toLowerCase(),
+    //   });
+    // }
     // Create article
     const article = await Article.create({
       title,
@@ -62,11 +61,26 @@ class ArticleService {
       thumbnail_url: images && images.length > 0 ? images[0] : null,
     });
 
-    await ArticleCategoryMap.create({
-      id: uuidv4(),
-      article_id: article.id,
-      article_category_id: existingCategory.id,
-    });
+    for (let name of category) {
+      const trimmedName = name.trim().toLowerCase();
+
+      let existingCategory = await Category.findOne({
+        where: { name: trimmedName },
+      });
+
+      if (!existingCategory) {
+        existingCategory = await Category.create({
+          id: uuidv4(),
+          name: trimmedName,
+        });
+      }
+      await ArticleCategoryMap.create({
+        id: uuidv4(),
+        article_id: article.id,
+        category_id: existingCategory.id,
+      });
+    }
+
     if (images && Array.isArray(images) && images.length > 0) {
       const imagePromises = images.map((imageUrl) =>
         ArticleImage.create({
@@ -89,11 +103,11 @@ class ArticleService {
           as: "images",
           attributes: ["id", "image_url"],
         },
-        // {
-        //   model: User,
-        //   as: "author",
-        //   attributes: ["id", "name", "email"],
-        // },
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
       ],
     });
 

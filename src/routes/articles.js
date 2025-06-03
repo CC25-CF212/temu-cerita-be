@@ -33,6 +33,7 @@ const articleRoutes = [
   {
     method: "POST",
     path: "/articles",
+    // Uncomment the following line if you want to use the original handler
     // handler: createArticleHandler,
     handler: createArticle,
     // options: {

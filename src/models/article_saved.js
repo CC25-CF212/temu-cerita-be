@@ -1,31 +1,59 @@
 "use strict";
+
 const { DataTypes } = require("sequelize");
-const sequelize = require("./index");
-const { v4: uuidv4 } = require("uuid");
+const sequelize = require(".");
 
 const ArticleSaved = sequelize.define(
-  "Article_saved",
+  "ArticleSaved",
   {
     id: {
       type: DataTypes.UUID,
-      defaultValue: uuidv4,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
     user_id: {
       type: DataTypes.UUID,
       allowNull: false,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
     },
     article_id: {
       type: DataTypes.UUID,
       allowNull: false,
+      references: {
+        model: "Articles",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
     },
   },
   {
-    modelName: "Article_saved",
+    sequelize,
+    modelName: "ArticleSaved",
     tableName: "Article_saved",
     underscored: true,
     timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+    indexes: [
+      {
+        unique: true,
+        fields: ["user_id", "article_id"], // Prevent duplicate saves
+        name: "unique_user_article_save",
+      },
+      {
+        fields: ["article_id"],
+      },
+      {
+        fields: ["user_id"],
+      },
+    ],
   }
 );
 
-module.exports = { ArticleSaved }
+module.exports = { ArticleSaved };

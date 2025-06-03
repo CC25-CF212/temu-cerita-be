@@ -2,9 +2,11 @@ const Hapi = require("@hapi/hapi");
 const Jwt = require("@hapi/jwt");
 
 const authRoutes = require("./src/routes/auth");
-const articleRoute = require("./src/routes/articles");
+// const articleRoute = require("./src/routes/articles");
 const authMiddleware = require("./src/middleware/authMiddleware");
 const sequelize = require("./src/models/index");
+const usersRoutes = require("./src/routes/usersRoutes");
+const articlesRoutes = require("./src/routes/articlesRoutes");
 require("dotenv").config();
 
 const init = async () => {
@@ -18,8 +20,9 @@ const init = async () => {
   // server.auth.default("jwt");
 
   server.route(authRoutes);
-  server.route(articleRoute);
-
+  //server.route(articleRoute);
+  server.route(articlesRoutes);
+  server.route(usersRoutes);
   await sequelize.sync();
 
   return server;

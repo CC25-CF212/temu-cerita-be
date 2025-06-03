@@ -1,0 +1,377 @@
+const {
+  Article,
+  ArticleImage,
+  ArticleLikes,
+  ArticleComments,
+  Category,
+  ArticleCategoryMap,
+  User,
+} = require("../models/relation");
+const { Op } = require("sequelize");
+
+// GET /api/articles - Mengambil semua artikel dengan data lengkap
+const getArticles = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, category, province, city } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Build where condition
+    let whereCondition = { active: true };
+    if (province) whereCondition.province = province;
+    if (city) whereCondition.city = city;
+
+    // Build category filter if provided
+    let categoryFilter = {};
+    if (category) {
+      categoryFilter = {
+        include: [
+          {
+            model: Category,
+            as: "category",
+            where: { name: { [Op.iLike]: `%${category}%` } },
+          },
+        ],
+      };
+    }
+
+    const articles = await Article.findAndCountAll({
+      where: whereCondition,
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: ArticleImage,
+          as: "images",
+          attributes: ["id", "image_url", "alt_text", "caption", "order"],
+          order: [["order", "ASC"]],
+        },
+        {
+          model: ArticleLikes,
+          as: "likes",
+          attributes: ["id", "user_id"],
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+        {
+          model: ArticleComments,
+          as: "comments",
+          attributes: ["id", "user_id", "parent_comment_id", "comments"],
+          where: { parent_comment_id: null, active: true }, // Only count parent comments
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+        {
+          model: ArticleCategoryMap,
+          as: "category_maps",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name", "slug", "color"],
+            },
+          ],
+          ...categoryFilter,
+        },
+      ],
+      order: [["created_at", "DESC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true,
+    });
+
+    // Transform data to match the desired format
+    const transformedArticles = articles.rows.map((article) => {
+      // Get primary category (first one)
+      const primaryCategory =
+        article.category_maps && article.category_maps.length > 0
+          ? article.category_maps[0].category.name
+          : "Uncategorized";
+
+      // Get all image URLs
+      const images = article.images.map((img) => img.image_url);
+
+      // Use first image as main image or fallback
+      const mainImage = images.length > 0 ? images[0] : "/images/default.png";
+
+      return {
+        id: article.id,
+        category: primaryCategory,
+        title: article.title,
+        slug: article.slug,
+        description:
+          article.content_html.replace(/<[^>]*>/g, "").substring(0, 150) +
+          "...", // Strip HTML and truncate
+        content_html: article.content_html,
+        province: article.province,
+        city: article.city,
+        active: article.active,
+        image: mainImage, // Primary image
+        images: images, // All images
+        createdAt: article.created_at,
+        updatedAt: article.updated_at,
+        likes: article.likes.length, // Count of likes
+        comments: article.comments.length, // Count of parent comments only
+        author: article.author,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        articles: transformedArticles,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(articles.count / limit),
+          totalItems: articles.count,
+          itemsPerPage: parseInt(limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching articles:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// GET /api/articles/:id - Mengambil artikel berdasarkan ID
+const getArticleById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const article = await Article.findOne({
+      where: { id, active: true },
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: ArticleImage,
+          as: "images",
+          attributes: ["id", "image_url"],
+        },
+        {
+          model: ArticleLikes,
+          as: "likes",
+          include: [
+            {
+              model: User,
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+        {
+          model: ArticleComments,
+          as: "comments",
+          where: { parent_comment_id: null },
+          required: false,
+          include: [
+            {
+              model: User,
+              attributes: ["id", "name"],
+            },
+            {
+              model: ArticleComments,
+              as: "replies",
+              include: [
+                {
+                  model: User,
+                  attributes: ["id", "name"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: ArticleCategoryMap,
+          as: "category_maps",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        message: "Article not found",
+      });
+    }
+
+    // Transform data
+    const primaryCategory =
+      article.category_maps && article.category_maps.length > 0
+        ? article.category_maps[0].category.name
+        : "Uncategorized";
+
+    const images = article.images.map((img) => img.image_url);
+    const mainImage = images.length > 0 ? images[0] : "/images/default.png";
+
+    const transformedArticle = {
+      id: article.id,
+      category: primaryCategory,
+      categories: article.category_maps.map((cm) => cm.category), // All categories
+      title: article.title,
+      slug: article.slug,
+      description:
+        article.content_html.replace(/<[^>]*>/g, "").substring(0, 150) + "...",
+      content_html: article.content_html,
+      province: article.province,
+      city: article.city,
+      active: article.active,
+      image: mainImage,
+      images: images,
+      createdAt: article.created_at,
+      updatedAt: article.updated_at,
+      likes: article.likes.length,
+      comments: article.comments.length,
+      author: article.author,
+      likesDetails: article.likes, // Detailed likes info
+      commentsDetails: article.comments, // Detailed comments with replies
+    };
+
+    res.status(200).json({
+      success: true,
+      data: transformedArticle,
+    });
+  } catch (error) {
+    console.error("Error fetching article:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// GET /api/articles/slug/:slug - Mengambil artikel berdasarkan slug
+const getArticleBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Same logic as getArticleById but using slug
+    const article = await Article.findOne({
+      where: { slug, active: true },
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: ArticleImage,
+          as: "images",
+          attributes: ["id", "image_url"],
+        },
+        {
+          model: ArticleLikes,
+          as: "likes",
+          attributes: ["id", "user_id"],
+        },
+        {
+          model: ArticleComments,
+          as: "comments",
+          where: { parent_comment_id: null },
+          required: false,
+          include: [
+            {
+              model: ArticleComments,
+              as: "replies",
+            },
+          ],
+        },
+        {
+          model: ArticleCategoryMap,
+          as: "category_maps",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        message: "Article not found",
+      });
+    }
+
+    // Same transformation as getArticleById
+    const primaryCategory =
+      article.category_maps && article.category_maps.length > 0
+        ? article.category_maps[0].category.name
+        : "Uncategorized";
+
+    const images = article.images.map((img) => img.image_url);
+    const mainImage = images.length > 0 ? images[0] : "/images/default.png";
+
+    const transformedArticle = {
+      id: article.id,
+      category: primaryCategory,
+      title: article.title,
+      slug: article.slug,
+      description:
+        article.content_html.replace(/<[^>]*>/g, "").substring(0, 150) + "...",
+      content_html: article.content_html,
+      province: article.province,
+      city: article.city,
+      active: article.active,
+      image: mainImage,
+      images: images,
+      createdAt: article.created_at,
+      updatedAt: article.updated_at,
+      likes: article.likes.length,
+      comments: article.comments.reduce((total, comment) => {
+        return total + 1 + (comment.replies ? comment.replies.length : 0);
+      }, 0), // Total comments including replies
+      author: article.author,
+    };
+
+    res.status(200).json({
+      success: true,
+      data: transformedArticle,
+    });
+  } catch (error) {
+    console.error("Error fetching article by slug:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = {
+  getArticles,
+  getArticleById,
+  getArticleBySlug,
+};
