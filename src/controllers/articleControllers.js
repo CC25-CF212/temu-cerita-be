@@ -6,8 +6,9 @@ const {
   Category,
   ArticleCategoryMap,
   User,
+  ArticleSaved,
 } = require("../models/relation");
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const articleService = require("../services/articleService");
 const sequelize = require("../models");
 
@@ -1704,6 +1705,104 @@ const getDashboard = async (request, h) => {
       .code(500);
   }
 };
+const getLikedArticlesByUser = async (request, h) => {
+  try {
+    const { userId } = request.params;
+
+    const likedArticles = await ArticleLikes.findAll({
+      where: { user_id: userId },
+      include: [
+        {
+          model: Article,
+          as: "article",
+          attributes: {
+            include: [
+              [
+                Sequelize.literal(`(
+                  SELECT COUNT(*)
+                  FROM "Article_likes" AS "al"
+                  WHERE "al"."article_id" = "article"."id"
+                )`),
+                "like_count",
+              ],
+              [
+                Sequelize.literal(`(
+                  SELECT COUNT(*)
+                  FROM "Article_comments" AS "ac"
+                  WHERE "ac"."article_id" = "article"."id"
+                )`),
+                "comment_count",
+              ],
+            ],
+          },
+        },
+      ],
+    });
+
+    const response = {
+      user_id: userId,
+      liked_articles: likedArticles.map((like) => ({
+        ...like.article.dataValues,
+        liked_at: like.created_at,
+      })),
+    };
+
+    return h.response(response).code(200);
+  } catch (error) {
+    console.error("Error getting liked articles:", error);
+    return h.response({ error: "Failed to get liked articles" }).code(500);
+  }
+};
+const getSavedArticlesByUser = async (request, h) => {
+  try {
+    const { userId } = request.params;
+
+    const savedArticles = await ArticleSaved.findAll({
+      where: { user_id: userId }, // Pastikan field name sesuai dengan DB schema
+      include: [
+        {
+          model: Article,
+          as: "article", // Pastikan alias sesuai dengan association
+          attributes: {
+            include: [
+              [
+                // Subquery: count all likes for this article
+                Sequelize.literal(`(
+                  SELECT COUNT(*)
+                  FROM "Article_saved" AS "al"
+                  WHERE "al"."article_id" = "article"."id"
+                )`),
+                "saved_count",
+              ],
+              [
+                // Total comment count for each article
+                Sequelize.literal(`(
+                  SELECT COUNT(*)
+                  FROM "Article_comments" AS "ac"
+                  WHERE "ac"."article_id" = "article"."id"
+                )`),
+                "comment_count",
+              ],
+            ],
+          },
+        },
+      ],
+    });
+
+    const response = {
+      user_id: userId,
+      saved_articles: savedArticles.map((saved) => ({
+        ...saved.article.dataValues,
+        saved_at: saved.created_at,
+      })),
+    };
+
+    return h.response(response).code(200);
+  } catch (error) {
+    console.error("Error getting saved articles:", error);
+    return h.response({ error: "Failed to get saved articles" }).code(500);
+  }
+};
 module.exports = {
   getArticles,
   getArticleById,
@@ -1725,4 +1824,6 @@ module.exports = {
   getUserLikedArticles,
   // Dashboard
   getDashboard,
+  getLikedArticlesByUser,
+  getSavedArticlesByUser,
 };

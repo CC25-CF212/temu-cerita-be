@@ -17,7 +17,15 @@ const {
   checkUserLike,
   getUserLikedArticles,
   getDashboard,
+  getLikedArticlesByUser,
+  getSavedArticlesByUser,
 } = require("../controllers/articleControllers");
+const {
+  postLikeArticle,
+  deleteLikeArticle,
+  postSaveArticle,
+  deleteSaveArticle,
+} = require("../controllers/articleController");
 // Custom validation schemas
 const imageSchema = Joi.object({
   image_url: Joi.string().uri().required(),
@@ -611,6 +619,80 @@ const articlesRoutes = [
     method: "GET",
     path: "/dashboard",
     handler: getDashboard,
+  },
+  {
+    method: "POST",
+    path: "/articles/{articleId}/{userId}/like",
+    handler: postLikeArticle,
+    options: {
+      validate: {
+        params: Joi.object({
+          articleId: Joi.string().required(),
+          userId: Joi.string().required(),
+        }),
+      },
+    },
+  },
+  {
+    method: "DELETE",
+    path: "/articles/{articleId}/like",
+    handler: deleteLikeArticle,
+    options: {
+      validate: {
+        params: Joi.object({
+          articleId: Joi.string().uuid().required(),
+        }),
+      },
+    },
+  },
+  {
+    method: "POST",
+    path: "/articles/{articleId}/{userId}/save",
+    handler: postSaveArticle,
+    options: {
+      validate: {
+        params: Joi.object({
+          articleId: Joi.string().required(),
+          userId: Joi.string().required(),
+        }),
+      },
+    },
+  },
+  {
+    method: "DELETE",
+    path: "/articles/{articleId}/save",
+    handler: deleteSaveArticle,
+    options: {
+      validate: {
+        params: Joi.object({
+          articleId: Joi.string().uuid().required(),
+        }),
+      },
+    },
+  },
+  {
+    method: "GET",
+    path: "/articles/likes/{userId}",
+    handler: getLikedArticlesByUser,
+    options: {
+      validate: {
+        params: Joi.object({
+          userId: Joi.string().required(),
+        }),
+      },
+    },
+  },
+  {
+    method: "GET",
+    path: "/articles/saved/{userId}",
+    handler: getSavedArticlesByUser,
+    options: {
+      validate: {
+        params: Joi.object({
+          userId: Joi.string().required(),
+        }),
+      },
+    },
   },
 ];
 

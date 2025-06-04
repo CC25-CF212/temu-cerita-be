@@ -383,9 +383,10 @@ const getAllCategories = async (request, h) => {
 
 const postLikeArticle = async (request, h) => {
   try {
-    const { articleId } = request.params;
-    const article = await Article.findOne({ where: { id: articleId } });
+    const { articleId, userId } = request.params;
 
+    // Check if article exists and is active
+    const article = await Article.findOne({ where: { id: articleId } });
     if (!article || !article.active) {
       return h
         .response({
@@ -396,22 +397,69 @@ const postLikeArticle = async (request, h) => {
         .code(404);
     }
 
-    const user = request.auth.credentials;
+    // Check if user already liked this article
+    const existingLike = await ArticleLikes.findOne({
+      where: {
+        article_id: articleId,
+        user_id: userId,
+      },
+    });
 
-    const articleLike = await ArticleLikes.create({
-      article_id: articleId,
-      user_id: user.id,
+    let message;
+    let isLiked;
+
+    if (existingLike) {
+      // Jika sudah exist, HAPUS like (unlike)
+      await ArticleLikes.destroy({
+        where: {
+          article_id: articleId,
+          user_id: userId,
+        },
+      });
+      message = `Article unliked by user ${userId}`;
+      isLiked = false;
+    } else {
+      // Jika tidak exist, INSERT like baru
+      await ArticleLikes.create({
+        article_id: articleId,
+        user_id: userId,
+      });
+      message = `Article liked by user ${userId}`;
+      isLiked = true;
+    }
+
+    // Get total likes count for this article
+    const totalLikes = await ArticleLikes.count({
+      where: { article_id: articleId },
     });
 
     return h
       .response({
-        statusCode: 201,
+        statusCode: 200,
         status: "success",
-        message: `Article liked by ${user.email}`,
+        message: message,
+        data: {
+          articleId: articleId,
+          userId: userId,
+          isLiked: isLiked,
+          totalLikes: totalLikes,
+        },
       })
-      .code(201);
+      .code(200);
   } catch (err) {
-    console.error("ERROR LIKING ARTICLE:", err);
+    console.error("ERROR TOGGLING ARTICLE LIKE:", err);
+
+    // Handle specific database errors
+    if (err.name === "SequelizeValidationError") {
+      return h
+        .response({
+          statusCode: 400,
+          status: "fail",
+          message: "Invalid data provided",
+        })
+        .code(400);
+    }
+
     return h
       .response({
         statusCode: 500,
@@ -481,9 +529,10 @@ const deleteLikeArticle = async (request, h) => {
 
 const postSaveArticle = async (request, h) => {
   try {
-    const { articleId } = request.params;
-    const article = await Article.findOne({ where: { id: articleId } });
+    const { articleId, userId } = request.params;
 
+    // Check if article exists and is active
+    const article = await Article.findOne({ where: { id: articleId } });
     if (!article || !article.active) {
       return h
         .response({
@@ -494,22 +543,72 @@ const postSaveArticle = async (request, h) => {
         .code(404);
     }
 
-    const user = request.auth.credentials;
+    //const user = request.auth.credentials;
 
-    const articleSave = await ArticleSaved.create({
-      article_id: articleId,
-      user_id: user.id,
+    // Check if user already saved this article
+    const existingSave = await ArticleSaved.findOne({
+      where: {
+        article_id: articleId,
+        user_id: userId,
+      },
+    });
+
+    let message;
+    let isSaved;
+
+    if (existingSave) {
+      // Jika sudah exist, HAPUS save (unsave)
+      await ArticleSaved.destroy({
+        where: {
+          article_id: articleId,
+          user_id: userId,
+        },
+      });
+      message = `Article unsaved by ${userId}`;
+      isSaved = false;
+    } else {
+      // Jika tidak exist, INSERT save baru
+      await ArticleSaved.create({
+        article_id: articleId,
+        user_id: userId,
+      });
+      message = `Article saved by ${userId}`;
+      isSaved = true;
+    }
+
+    // Get total saves count for this article (optional)
+    const totalSaves = await ArticleSaved.count({
+      where: { article_id: articleId },
     });
 
     return h
       .response({
-        statusCode: 201,
+        statusCode: 200,
         status: "success",
-        message: `Article saved by ${user.email}`,
+        message: message,
+        data: {
+          articleId: articleId,
+          userId: userId,
+          userEmail: userId,
+          isSaved: isSaved,
+          totalSaves: totalSaves,
+        },
       })
-      .code(201);
+      .code(200);
   } catch (err) {
-    console.error("ERROR SAVED ARTICLE:", err);
+    console.error("ERROR TOGGLING ARTICLE SAVE:", err);
+
+    // Handle specific database errors
+    if (err.name === "SequelizeValidationError") {
+      return h
+        .response({
+          statusCode: 400,
+          status: "fail",
+          message: "Invalid data provided",
+        })
+        .code(400);
+    }
+
     return h
       .response({
         statusCode: 500,
