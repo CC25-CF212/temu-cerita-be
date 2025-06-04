@@ -61,25 +61,46 @@ class ArticleService {
       thumbnail_url: images && images.length > 0 ? images[0] : null,
     });
 
-    for (let name of category) {
-      const trimmedName = name.trim().toLowerCase();
+    // for (let name of category) {
+    //   const trimmedName = name.trim().toLowerCase();
 
-      let existingCategory = await Category.findOne({
-        where: { name: trimmedName },
-      });
+    //   let existingCategory = await Category.findOne({
+    //     where: { name: trimmedName },
+    //   });
 
-      if (!existingCategory) {
-        existingCategory = await Category.create({
-          id: uuidv4(),
-          name: trimmedName,
-        });
-      }
-      await ArticleCategoryMap.create({
+    //   if (!existingCategory) {
+    //     existingCategory = await Category.create({
+    //       id: uuidv4(),
+    //       name: trimmedName,
+    //     });
+    //   }
+    //   await ArticleCategoryMap.create({
+    //     id: uuidv4(),
+    //     article_id: article.id,
+    //     category_id: existingCategory.id,
+    //   });
+    // }
+
+    let existingCategory = await Category.findOne({
+      where: {
+        [Op.or]: [
+          { name: category }, // cari berdasarkan nama
+          { id: category }, // atau berdasarkan ID
+        ],
+      },
+    });
+
+    if (!existingCategory) {
+      existingCategory = await Category.create({
         id: uuidv4(),
-        article_id: article.id,
-        category_id: existingCategory.id,
+        name: category,
       });
     }
+    await ArticleCategoryMap.create({
+      id: uuidv4(),
+      article_id: article.id,
+      category_id: existingCategory.id,
+    });
 
     if (images && Array.isArray(images) && images.length > 0) {
       const imagePromises = images.map((imageUrl) =>
