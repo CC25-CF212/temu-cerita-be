@@ -19,6 +19,7 @@ const {
   getDashboard,
   getLikedArticlesByUser,
   getSavedArticlesByUser,
+  getArticlesByIds,
 } = require("../controllers/articleControllers");
 const {
   postLikeArticle,
@@ -691,6 +692,20 @@ const articlesRoutes = [
         params: Joi.object({
           userId: Joi.string().required(),
         }),
+      },
+    },
+  },
+  // Alternative route untuk multiple articles - POST method (recommended untuk banyak IDs)
+  {
+    method: "POST",
+    path: "/articles/bulk",
+    handler: getArticlesByIds,
+    options: {
+      validate: {
+        // Atau ada .required() di level object
+        payload: Joi.object({
+          ids: Joi.array().items(Joi.string()),
+        }).required(),
       },
     },
   },

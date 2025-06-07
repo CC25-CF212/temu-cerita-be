@@ -1803,6 +1803,206 @@ const getSavedArticlesByUser = async (request, h) => {
     return h.response({ error: "Failed to get saved articles" }).code(500);
   }
 };
+const getArticlesByIds = async (request, h) => {
+  try {
+    console.log("Request method:", request.method); // Debug log
+    console.log("Request path:", request.path); // Debug log
+    console.log("Request payload:", request.payload); // Debug log
+    console.log("Request params:", request.params); // Debug log
+
+    // Ambil IDs dari request body (untuk POST)
+    let ids;
+
+    // Pastikan mengambil dari payload, bukan dari parameter path
+    if (request.payload && request.payload.ids) {
+      ids = request.payload.ids;
+    } else {
+      return h
+        .response({
+          success: false,
+          message: "Request payload is missing or invalid",
+        })
+        .code(400);
+    }
+
+    console.log("Extracted IDs:", ids); // Debug log
+
+    // Validasi IDs
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return h
+        .response({
+          success: false,
+          message: "IDs parameter is required and must be an array",
+        })
+        .code(400);
+    }
+
+    // Validasi format UUID untuk setiap ID
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const invalidIds = ids.filter((id) => !uuidRegex.test(id));
+
+    if (invalidIds.length > 0) {
+      return h
+        .response({
+          success: false,
+          message: "Invalid UUID format detected",
+          invalid_ids: invalidIds,
+        })
+        .code(400);
+    }
+
+    // Pagination parameters
+    const page = parseInt(request.query?.page) || 1;
+    const limit = parseInt(request.query?.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    console.log("Validated IDs:", ids); // Debug log
+    console.log("Pagination:", { page, limit, offset }); // Debug log
+
+    // Query articles berdasarkan IDs dengan Op.in
+    const { Op } = require("sequelize");
+
+    const articles = await Article.findAndCountAll({
+      where: {
+        id: {
+          [Op.in]: ids, // Menggunakan Op.in untuk array IDs
+        },
+        active: true,
+      },
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: ArticleImage,
+          as: "images",
+          attributes: ["id", "image_url"],
+        },
+        {
+          model: ArticleLikes,
+          as: "likes",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+        {
+          model: ArticleComments,
+          as: "comments",
+          where: { parent_comment_id: null },
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name"],
+            },
+            {
+              model: ArticleComments,
+              as: "replies",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "name"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: ArticleCategoryMap,
+          as: "category_maps",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+      limit: limit,
+      offset: offset,
+      order: [["created_at", "DESC"]], // Urutkan berdasarkan tanggal terbaru
+    });
+
+    console.log("Found articles count:", articles.count); // Debug log
+
+    if (!articles.rows || articles.rows.length === 0) {
+      return h
+        .response({
+          success: false,
+          message: "No articles found for the provided IDs",
+          meta: {
+            requested_ids: ids,
+            found_count: 0,
+            not_found_ids: ids,
+          },
+        })
+        .code(404);
+    }
+
+    const transformedArticles = articles.rows.map((article) => {
+      const primaryCategory =
+        article.category_maps?.[0]?.category?.name || "Uncategorized";
+      const images = article.images.map((img) => img.image_url);
+      const mainImage = images.length > 0 ? images[0] : "/images/default.png";
+
+      return {
+        id: article.id,
+        category: primaryCategory,
+        title: article.title,
+        slug: article.slug,
+        description:
+          article.content_html.replace(/<[^>]*>/g, "").substring(0, 150) +
+          "...",
+        content_html: article.content_html,
+        province: article.province,
+        city: article.city,
+        active: article.active,
+        thumbnail_url: mainImage,
+        images: images,
+        createdAt: article.created_at,
+        updatedAt: article.updated_at,
+        likes: article.likes.length,
+        comments: article.comments.length,
+        author: article.author,
+      };
+    });
+
+    return h
+      .response({
+        success: true,
+        data: {
+          articles: transformedArticles,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(articles.count / limit),
+            totalItems: articles.count,
+            itemsPerPage: parseInt(limit),
+          },
+        },
+      })
+      .code(200);
+  } catch (error) {
+    console.error("Error fetching articles by IDs:", error);
+    console.error("Error stack:", error.stack); // Debug log
+    return h
+      .response({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
+      })
+      .code(500);
+  }
+};
 module.exports = {
   getArticles,
   getArticleById,
@@ -1826,4 +2026,5 @@ module.exports = {
   getDashboard,
   getLikedArticlesByUser,
   getSavedArticlesByUser,
+  getArticlesByIds,
 };
