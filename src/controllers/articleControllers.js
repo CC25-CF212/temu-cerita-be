@@ -12,6 +12,162 @@ const { Op, Sequelize } = require("sequelize");
 const articleService = require("../services/articleService");
 const sequelize = require("../models");
 
+// Pastikan Anda mengimpor Op dari Sequelize di bagian atas file Anda
+// const { Op } = require("sequelize");
+
+const getArticlesByKondisi = async (request, h) => {
+  try {
+    // 1. Hilangkan parameter paginasi (page, limit, offset)
+    const { category, province, city } = request.query;
+
+    // 2. Bangun kondisi WHERE untuk model Artikel utama
+    // Menggunakan Op.iLike untuk pencarian parsial dan case-insensitive
+    const whereCondition = { active: true };
+    if (province) {
+      whereCondition.province = { [Op.iLike]: `%${province}%` };
+    }
+    if (city) {
+      whereCondition.city = { [Op.iLike]: `%${city}%` };
+    }
+
+    // Opsi include dasar untuk semua kueri
+    const includeOptions = [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "name", "email"],
+      },
+      {
+        model: ArticleImage,
+        as: "images",
+        attributes: ["id", "image_url", "alt_text", "caption", "order"],
+        order: [["order", "ASC"]],
+      },
+      {
+        model: ArticleLikes,
+        as: "likes",
+        attributes: ["id", "user_id"],
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name"],
+          },
+        ],
+      },
+      {
+        model: ArticleComments,
+        as: "comments",
+        attributes: ["id", "user_id", "parent_comment_id", "comments"],
+        where: { parent_comment_id: null, active: true },
+        required: false,
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name"],
+          },
+        ],
+      },
+      {
+        model: ArticleCategoryMap,
+        as: "category_maps",
+        include: [
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "name", "slug", "color"],
+          },
+        ],
+        // Set 'required: false' secara default agar artikel tanpa kategori tetap muncul
+        required: false,
+      },
+    ];
+
+    // // 3. Tambahkan filter kategori secara dinamis ke dalam include
+    // if (category) {
+    //   const categoryMapInclude = includeOptions.find(
+    //     (inc) => inc.as === "category_maps"
+    //   );
+    //   // Tambahkan kondisi 'where' ke nested include untuk Category
+    //   categoryMapInclude.include[0].where = {
+    //     name: { [Op.iLike]: `%${category}%` },
+    //   };
+    //   // Jadikan 'required: true' HANYA jika ada filter kategori.
+    //   // Ini mengubah JOIN menjadi INNER JOIN untuk memfilter artikel.
+    //   categoryMapInclude.required = true;
+    // }
+    // 3. Tambahkan filter kategori secara dinamis ke dalam include
+    if (category) {
+      const categoryMapInclude = includeOptions.find(
+        (inc) => inc.as === "category_maps"
+      );
+      // Tambahkan kondisi 'where' ke nested include untuk Category
+      categoryMapInclude.include[0].where = {
+        // MENGGANTI Op.iLike menjadi Op.eq untuk pencocokan persis
+        name: { [Op.eq]: category },
+      };
+      // Jadikan 'required: true' HANYA jika ada filter kategori.
+      // Ini mengubah JOIN menjadi INNER JOIN untuk memfilter artikel.
+      categoryMapInclude.required = true;
+    }
+
+    // 4. Gunakan findAll alih-alih findAndCountAll karena tidak ada paginasi
+    const articles = await Article.findAll({
+      where: whereCondition,
+      include: includeOptions,
+      order: [["created_at", "DESC"]],
+    });
+
+    // Transformasi data tetap sama
+    const transformedArticles = articles.map((article) => {
+      const primaryCategory =
+        article.category_maps?.[0]?.category?.name || "Uncategorized";
+      const images = article.images.map((img) => img.image_url);
+      const mainImage = images.length > 0 ? images[0] : "/images/default.png";
+
+      return {
+        id: article.id,
+        category: primaryCategory,
+        title: article.title,
+        slug: article.slug,
+        description:
+          article.content_html.replace(/<[^>]*>/g, "").substring(0, 150) +
+          "...",
+        content_html: article.content_html,
+        province: article.province,
+        city: article.city,
+        active: article.active,
+        thumbnail_url: mainImage,
+        images: images,
+        createdAt: article.created_at,
+        updatedAt: article.updated_at,
+        likes: article.likes.length,
+        comments: article.comments.length,
+        author: article.author,
+      };
+    });
+
+    // 5. Kembalikan respons tanpa objek paginasi
+    return h
+      .response({
+        success: true,
+        data: {
+          articles: transformedArticles,
+        },
+      })
+      .code(200);
+  } catch (error) {
+    console.error("Error fetching articles:", error);
+    return h
+      .response({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
+      })
+      .code(500);
+  }
+};
 const getArticles = async (request, h) => {
   try {
     const { page = 1, limit = 10, category, province, city } = request.query;
@@ -2027,4 +2183,5 @@ module.exports = {
   getLikedArticlesByUser,
   getSavedArticlesByUser,
   getArticlesByIds,
+  getArticlesByKondisi
 };

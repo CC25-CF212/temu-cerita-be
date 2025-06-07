@@ -20,6 +20,7 @@ const {
   getLikedArticlesByUser,
   getSavedArticlesByUser,
   getArticlesByIds,
+  getArticlesByKondisi,
 } = require("../controllers/articleControllers");
 const {
   postLikeArticle,
@@ -706,6 +707,20 @@ const articlesRoutes = [
         payload: Joi.object({
           ids: Joi.array().items(Joi.string()),
         }).required(),
+      },
+    },
+  },
+  {
+    method: "GET",
+    path: "/articles-by-conditional",
+    handler: getArticlesByKondisi,
+    options: {
+      validate: {
+        query: Joi.object({
+          category: Joi.string().optional(),
+          province: Joi.string().optional(),
+          city: Joi.string().optional(),
+        }),
       },
     },
   },
